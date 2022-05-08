@@ -9,6 +9,9 @@ Project contains three services that are located in three separate folders.
 - GPS Simulator (GPS)
 - Vehicle Monitoring System (VMS)
 
+## Project design
+
+![Alt text](https://github.com/Admir-Walker/Fleet-Management-System/blob/main/design.png)
 
 ## Tech
 Fleet Management System and its services use a number of open source projects to work properly:
