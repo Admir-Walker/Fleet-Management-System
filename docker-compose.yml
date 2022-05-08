@@ -1,0 +1,124 @@
+version: '3.7'
+services:
+  rabbitmq3:
+    image: rabbitmq:3-management
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    networks:
+      - network
+    healthcheck:
+      test: "/opt/rabbitmq/sbin/rabbitmqctl status"
+      interval: 2s
+      timeout: 30s
+      retries: 15
+
+  fms:
+    build:
+      context: ./fleet_management_service
+    command: uvicorn main:app --reload --host 0.0.0.0
+    ports:
+      - 8008:8000
+    networks:
+      - network
+    volumes:
+      - .:/app
+    depends_on:
+      fms-db:
+        condition: service_healthy
+      rabbitmq3:
+        condition: service_healthy
+
+  gps:
+    build:
+      context: ./gps_simulator
+    command: python3 -u app.py
+    networks:
+      - network
+    volumes:
+      - .:/app
+    depends_on:
+      rabbitmq3:
+        condition: service_healthy
+
+  vms:
+    build:
+      context: ./vehicle_monitoring_system
+    command: python3 -u app.py
+    networks:
+      - network
+    volumes:
+      - .:/app
+    depends_on:
+      rabbitmq3:
+        condition: service_healthy
+      vms-db:
+        condition: service_healthy
+
+  fms-db:
+    image: mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+    volumes:
+      - fms-db:/data/db
+    networks:
+      - network
+    healthcheck:
+      test: echo 'db.runCommand({serverStatus:1}).ok' | mongo admin -u root -p root --quiet | grep 1
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  vms-db:
+    image: mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+    volumes:
+      - vms-db:/data/db
+    networks:
+      - network
+    healthcheck:
+      test: echo 'db.runCommand({serverStatus:1}).ok' | mongo admin -u root -p root --quiet | grep 1
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  mongo-express-vms:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: root
+      ME_CONFIG_MONGODB_URL: mongodb://root:root@vms-db:27017/
+    networks:
+      - network
+
+  mongo-express-fms:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8082:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: root
+      ME_CONFIG_MONGODB_URL: mongodb://root:root@fms-db:27017/
+    networks:
+      - network
+networks:
+  # Declare our private network.  We must declare one for the magic
+  # Docker DNS to work, but otherwise its default settings are fine.
+  network: {}
+
+volumes:
+  fms-db:
+    driver: local
+  vms-db:
+    driver: local
